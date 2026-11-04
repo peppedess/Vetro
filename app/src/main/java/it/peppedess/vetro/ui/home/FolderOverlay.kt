@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -41,6 +40,8 @@ import it.peppedess.vetro.data.AppInfo
 import it.peppedess.vetro.data.FolderItem
 import it.peppedess.vetro.ui.components.AppIcon
 import it.peppedess.vetro.ui.components.IconAction
+import it.peppedess.vetro.ui.glass.glass
+import it.peppedess.vetro.ui.theme.VetroFont
 
 @Composable
 fun FolderOverlay(
@@ -64,7 +65,7 @@ fun FolderOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
+            .background(Color.Black.copy(alpha = 0.15f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -79,11 +80,12 @@ fun FolderOverlay(
                 singleLine = true,
                 textStyle = TextStyle(
                     color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = VetroFont,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 ),
-                cursorBrush = SolidColor(Color.White),
+                cursorBrush = SolidColor(Color(0xFF0A84FF)),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
                     onDone = {
@@ -93,25 +95,24 @@ fun FolderOverlay(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp),
+                    .padding(horizontal = 36.dp),
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .clip(RoundedCornerShape(36.dp))
-                    .background(Color.White.copy(alpha = 0.22f))
+                    .padding(horizontal = 30.dp)
+                    .glass(RoundedCornerShape(38.dp), Color.White.copy(alpha = 0.2f), border = false)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {},
                     )
-                    .padding(18.dp),
+                    .padding(horizontal = 14.dp, vertical = 22.dp),
             ) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                    modifier = Modifier.heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    modifier = Modifier.heightIn(max = 440.dp),
                 ) {
                     items(folder.apps, key = { it.key }) { app ->
                         AppIcon(
@@ -121,6 +122,7 @@ fun FolderOverlay(
                                 onDismiss()
                                 onLaunch(app)
                             },
+                            iconSize = 64.dp,
                         )
                     }
                 }

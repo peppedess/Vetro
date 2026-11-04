@@ -30,39 +30,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.peppedess.vetro.data.AppInfo
 import it.peppedess.vetro.data.FolderItem
+import it.peppedess.vetro.ui.glass.glass
+import it.peppedess.vetro.ui.theme.VetroFont
 
 val IconShape = RoundedCornerShape(percent = 23)
-
-data class IconAction(
-    val label: String,
-    val destructive: Boolean = false,
-    val run: () -> Unit,
-)
 
 @Composable
 fun AppIcon(
@@ -117,30 +114,35 @@ fun FolderIcon(
         clickableInEdit = true,
         onRemove = onRemove,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White.copy(alpha = 0.28f))
-                .padding(iconSize * 0.12f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            repeat(3) { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    repeat(3) { col ->
-                        val app = folder.apps.getOrNull(row * 3 + col)
-                        val mini = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                        if (app != null) {
-                            Image(bitmap = app.icon, contentDescription = null, modifier = mini.clip(IconShape))
-                        } else {
-                            Spacer(mini)
-                        }
+        FolderPreview(folder, iconSize)
+    }
+}
+
+@Composable
+private fun FolderPreview(folder: FolderItem, iconSize: Dp) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .glass(IconShape, Color.White.copy(alpha = 0.22f), border = false)
+            .padding(iconSize * 0.13f),
+        verticalArrangement = Arrangement.spacedBy(iconSize * 0.05f),
+    ) {
+        repeat(3) { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(iconSize * 0.05f),
+            ) {
+                repeat(3) { col ->
+                    val app = folder.apps.getOrNull(row * 3 + col)
+                    val mini = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                    if (app != null) {
+                        Image(bitmap = app.icon, contentDescription = null, modifier = mini.clip(IconShape))
+                    } else {
+                        Spacer(mini)
                     }
                 }
             }
@@ -163,15 +165,16 @@ private fun IconTile(
     onRemove: (() -> Unit)?,
     content: @Composable () -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
+    val menu = LocalMenuController.current
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val bounds = remember { mutableStateOf(Rect.Zero) }
 
     val scale = animateFloatAsState(
         targetValue = when {
             emphasized -> 1.18f
-            pressed || menuOpen -> 0.9f
+            pressed -> 0.9f
             else -> 1f
         },
         animationSpec = spring(
@@ -183,8 +186,8 @@ private fun IconTile(
 
     val wiggle: State<Float>? = if (editing) {
         rememberInfiniteTransition(label = "wiggle").animateFloat(
-            initialValue = -1.8f,
-            targetValue = 1.8f,
+            initialValue = -1.6f,
+            targetValue = 1.6f,
             animationSpec = infiniteRepeatable(
                 animation = tween(
                     durationMillis = 120 + (seed and 31),
@@ -199,7 +202,7 @@ private fun IconTile(
     }
 
     Column(
-        modifier = modifier.width(iconSize + 20.dp),
+        modifier = modifier.width(iconSize + 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -208,20 +211,27 @@ private fun IconTile(
                 scaleX = s
                 scaleY = s
                 rotationZ = wiggle?.value ?: 0f
+                alpha = if (menu.request?.bounds == bounds.value) 0f else 1f
             },
         ) {
             Box(
                 modifier = Modifier
                     .size(iconSize)
+                    .onGloballyPositioned { bounds.value = it.boundsInRoot() }
                     .clip(IconShape)
                     .combinedClickable(
                         interactionSource = interaction,
                         indication = null,
-                        onClick = { if (!editing || clickableInEdit) onClick() },
+                        onClick = {
+                            if (!editing || clickableInEdit) {
+                                LaunchSource.bounds = bounds.value
+                                onClick()
+                            }
+                        },
                         onLongClick = {
                             if (!editing && actions.isNotEmpty()) {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                menuOpen = true
+                                menu.show(MenuRequest(bounds.value, actions, content))
                             }
                         },
                     ),
@@ -236,7 +246,7 @@ private fun IconTile(
                         .offset(x = (-7).dp, y = (-7).dp)
                         .size(22.dp)
                         .clip(CircleShape)
-                        .background(Color(0xF2D1D1D6))
+                        .glass(CircleShape, Color(0xFF8E8E93).copy(alpha = 0.55f), border = false)
                         .clickable(onClick = onRemove),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -244,28 +254,7 @@ private fun IconTile(
                         Modifier
                             .size(width = 10.dp, height = 2.dp)
                             .clip(RoundedCornerShape(1.dp))
-                            .background(Color.Black),
-                    )
-                }
-            }
-
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                shape = RoundedCornerShape(14.dp),
-            ) {
-                actions.forEach { action ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = action.label,
-                                color = if (action.destructive) Color(0xFFFF453A) else Color.Unspecified,
-                            )
-                        },
-                        onClick = {
-                            menuOpen = false
-                            action.run()
-                        },
+                            .background(Color.White),
                     )
                 }
             }
@@ -279,8 +268,10 @@ private fun IconTile(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    fontSize = 12.sp,
-                    shadow = Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 1f), 4f),
+                    fontFamily = VetroFont,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.5.sp,
+                    shadow = Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1f), 3f),
                 ),
             )
         }

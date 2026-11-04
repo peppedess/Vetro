@@ -43,7 +43,7 @@ import it.peppedess.vetro.ui.components.FolderIcon
 import it.peppedess.vetro.ui.components.IconAction
 import kotlin.math.roundToInt
 
-private val ICON_SIZE = 60.dp
+val HOME_ICON_SIZE = 60.dp
 
 @Composable
 fun HomeGrid(
@@ -51,6 +51,7 @@ fun HomeGrid(
     pageOffset: Int,
     columns: Int,
     rows: Int,
+    reservedRows: Int,
     editing: Boolean,
     onLaunch: (AppInfo) -> Unit,
     onOpenFolder: (FolderItem) -> Unit,
@@ -63,6 +64,7 @@ fun HomeGrid(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val reserved = reservedRows * columns
 
     val currentItems by rememberUpdatedState(items)
     val currentOffset by rememberUpdatedState(pageOffset)
@@ -97,42 +99,60 @@ fun HomeGrid(
                 var total = 0f
                 detectVerticalDragGestures(
                     onDragStart = { total = 0f },
-                    onDragEnd = { if (total > 100.dp.toPx()) swipeDown() },
+                    onDragEnd = { if (total > 90.dp.toPx()) swipeDown() },
                     onVerticalDrag = { change, amount ->
                         change.consume()
                         total += amount
                     },
                 )
             }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         val cellW = constraints.maxWidth / columns.toFloat()
         val cellH = constraints.maxHeight / rows.toFloat()
-        val iconPx = with(density) { ICON_SIZE.toPx() }
+        val iconPx = with(density) { HOME_ICON_SIZE.toPx() }
         val cellWdp = with(density) { cellW.toDp() }
         val cellHdp = with(density) { cellH.toDp() }
 
-        fun cellOrigin(index: Int) = Offset((index % columns) * cellW, (index / columns) * cellH)
+        fun slotOrigin(slot: Int) = Offset((slot % columns) * cellW, (slot / columns) * cellH)
+        fun itemOrigin(index: Int) = slotOrigin(index + reserved)
+        fun iconCenter(index: Int) = itemOrigin(index) + Offset(cellW / 2f, iconPx / 2f)
 
-        fun iconCenter(index: Int) = cellOrigin(index) + Offset(cellW / 2f, iconPx / 2f)
-
+        /** Indice elemento sotto il punto (può essere negativo se cade sui widget). */
         fun indexAt(p: Offset): Int {
             val col = (p.x / cellW).toInt().coerceIn(0, columns - 1)
             val row = (p.y / cellH).toInt().coerceIn(0, rows - 1)
-            return row * columns + col
+            return row * columns + col - reserved
+        }
+
+        if (reservedRows > 0) {
+            val inset = (cellW - iconPx) / 2f
+            val widgetW = with(density) { (cellW + iconPx).toDp() }
+            val widgetH = with(density) { (cellH * (reservedRows - 1) + iconPx).toDp() }
+            CalendarWidget(
+                Modifier
+                    .offset { IntOffset(inset.roundToInt(), 0) }
+                    .size(widgetW, widgetH),
+            )
+            ClockWidget(
+                Modifier
+                    .offset { IntOffset((cellW * 2 + inset).roundToInt(), 0) }
+                    .size(widgetW, widgetH),
+            )
         }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(cellW, cellH) {
+                .pointerInput(cellW, cellH, reserved) {
                     detectTapGestures(
                         onLongPress = { p ->
-                            if (currentItems.getOrNull(indexAt(p)) == null) enterEdit()
+                            val idx = indexAt(p)
+                            if (idx >= 0 && currentItems.getOrNull(idx) == null) enterEdit()
                         },
                     )
                 }
-                .pointerInput(editing, cellW, cellH) {
+                .pointerInput(editing, cellW, cellH, reserved) {
                     if (!editing) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -152,7 +172,7 @@ fun HomeGrid(
                             change.consume()
                             dragPos = change.position
                             val others = currentItems.filter { it.key != item.key }
-                            val idx = indexAt(change.position)
+                            val idx = indexAt(change.position).coerceAtLeast(0)
                             val shown = others.toMutableList().apply {
                                 add(hoverIndex.coerceIn(0, size), item)
                             }
@@ -183,7 +203,7 @@ fun HomeGrid(
             display.forEachIndexed { index, item ->
                 key(item.key) {
                     val position by animateOffsetAsState(
-                        targetValue = cellOrigin(index),
+                        targetValue = itemOrigin(index),
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "cell",
                     )
@@ -221,7 +241,6 @@ fun HomeGrid(
                         .graphicsLayer {
                             scaleX = 1.12f
                             scaleY = 1.12f
-                            alpha = 0.95f
                         },
                     contentAlignment = Alignment.TopCenter,
                 ) {
@@ -255,7 +274,7 @@ private fun HomeItemView(
             app = item.app,
             actions = actions,
             onClick = { onLaunch(item.app) },
-            iconSize = ICON_SIZE,
+            iconSize = HOME_ICON_SIZE,
             editing = editing,
             emphasized = emphasized,
             onRemove = onRemove,
@@ -264,7 +283,7 @@ private fun HomeItemView(
             folder = item,
             actions = actions,
             onClick = { onOpenFolder(item) },
-            iconSize = ICON_SIZE,
+            iconSize = HOME_ICON_SIZE,
             editing = editing,
             emphasized = emphasized,
             onRemove = onRemove,

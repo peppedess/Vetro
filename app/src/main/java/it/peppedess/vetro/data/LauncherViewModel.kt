@@ -2,6 +2,7 @@ package it.peppedess.vetro.data
 
 import android.app.Application
 import android.content.pm.LauncherApps
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -27,6 +28,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = AppRepository(app)
     private val store = LayoutStore(app)
+    private val wallpapers = WallpaperRepository(app)
+    private var wallpaperSize = 0 to 0
     private val launcherApps = app.getSystemService(LauncherApps::class.java)
 
     private var apps: List<AppInfo> = emptyList()
@@ -34,6 +37,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(LauncherState())
     val state: StateFlow<LauncherState> = _state.asStateFlow()
+
+    private val _wallpaper = MutableStateFlow<WallpaperImages?>(null)
+    val wallpaper: StateFlow<WallpaperImages?> = _wallpaper.asStateFlow()
 
     private val callback = object : LauncherApps.Callback() {
         override fun onPackageRemoved(packageName: String?, user: UserHandle?) = refresh()
@@ -62,6 +68,38 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             }
             apps = loaded
             reconcile(defaults)
+        }
+    }
+
+    // ---- Sfondo ----
+
+    fun prepareWallpaper(width: Int, height: Int) {
+        if (width <= 0 || height <= 0 || wallpaperSize == (width to height)) return
+        wallpaperSize = width to height
+        viewModelScope.launch {
+            _wallpaper.value = withContext(Dispatchers.Default) { wallpapers.load(width, height) }
+        }
+    }
+
+    fun setWallpaper(uri: Uri) {
+        val (width, height) = wallpaperSize
+        if (width <= 0) return
+        viewModelScope.launch {
+            val images = withContext(Dispatchers.IO) {
+                if (wallpapers.save(uri, width, height)) wallpapers.load(width, height) else null
+            }
+            if (images != null) _wallpaper.value = images
+        }
+    }
+
+    fun resetWallpaper() {
+        val (width, height) = wallpaperSize
+        if (width <= 0) return
+        viewModelScope.launch {
+            _wallpaper.value = withContext(Dispatchers.IO) {
+                wallpapers.reset()
+                wallpapers.load(width, height)
+            }
         }
     }
 

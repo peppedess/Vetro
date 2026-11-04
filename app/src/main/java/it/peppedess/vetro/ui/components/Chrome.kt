@@ -1,9 +1,12 @@
 package it.peppedess.vetro.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -26,16 +29,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.peppedess.vetro.data.AppInfo
+import it.peppedess.vetro.ui.glass.GlassTint
+import it.peppedess.vetro.ui.glass.glass
+import it.peppedess.vetro.ui.theme.VetroFont
 
 private val DockShape = RoundedCornerShape(34.dp)
 
@@ -50,12 +54,10 @@ fun Dock(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 8.dp)
-            .clip(DockShape)
-            .background(Color.White.copy(alpha = 0.22f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.25f), DockShape)
-            .padding(14.dp),
+            .padding(horizontal = 10.dp)
+            .padding(bottom = 6.dp)
+            .glass(DockShape, GlassTint.Dock)
+            .padding(horizontal = 6.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         if (apps.isEmpty()) Spacer(Modifier.height(60.dp))
@@ -68,6 +70,47 @@ fun Dock(
                 editing = editing,
                 onRemove = { onRemove(app) },
             )
+        }
+    }
+}
+
+/** Pillola "Cerca" sopra il Dock; durante lo scorrimento mostra i puntini delle pagine. */
+@Composable
+fun HomeSearchPill(
+    pageCount: Int,
+    current: Int,
+    scrolling: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(30.dp)
+            .glass(RoundedCornerShape(50), GlassTint.Light, border = false)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedContent(
+            targetState = scrolling,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "pill",
+        ) { showDots ->
+            if (showDots) {
+                PageDots(count = pageCount, current = current)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlyphIcon(Glyph.SEARCH, Color.White, Modifier.size(13.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "Cerca",
+                        color = Color.White,
+                        fontFamily = VetroFont,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
         }
     }
 }
@@ -91,6 +134,29 @@ fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     }
 }
 
+/** Pulsante a pillola in vetro, come "Fine" e "Modifica" su iOS. */
+@Composable
+fun GlassPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    glyph: Glyph = Glyph.NONE,
+) {
+    Row(
+        modifier = modifier
+            .glass(RoundedCornerShape(50), Color.White.copy(alpha = 0.26f), border = false)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 15.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (glyph != Glyph.NONE) {
+            GlyphIcon(glyph, Color.White, Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(text, color = Color.White, fontFamily = VetroFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    }
+}
+
 @Composable
 fun SearchPill(
     value: String,
@@ -104,8 +170,8 @@ fun SearchPill(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
-        cursorBrush = SolidColor(Color.White),
+        textStyle = TextStyle(color = Color.White, fontSize = 17.sp, fontFamily = VetroFont),
+        cursorBrush = SolidColor(Color(0xFF0A84FF)),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
         modifier = modifier
@@ -114,29 +180,20 @@ fun SearchPill(
         decorationBox = { inner ->
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .glass(RoundedCornerShape(12.dp), Color.White.copy(alpha = 0.16f), border = false)
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Canvas(Modifier.size(16.dp)) {
-                    val stroke = 2.dp.toPx()
-                    val radius = size.minDimension * 0.33f
-                    val center = Offset(radius + stroke, radius + stroke)
-                    val tint = Color.White.copy(alpha = 0.7f)
-                    drawCircle(tint, radius = radius, center = center, style = Stroke(stroke))
-                    drawLine(
-                        color = tint,
-                        start = center + Offset(radius * 0.7f, radius * 0.7f),
-                        end = Offset(size.width, size.height),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round,
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
+                GlyphIcon(Glyph.SEARCH, Color.White.copy(alpha = 0.65f), Modifier.size(17.dp))
+                Spacer(Modifier.width(7.dp))
                 Box(Modifier.weight(1f)) {
                     if (value.isEmpty()) {
-                        Text(placeholder, color = Color.White.copy(alpha = 0.6f), fontSize = 17.sp)
+                        Text(
+                            text = placeholder,
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontFamily = VetroFont,
+                            fontSize = 17.sp,
+                        )
                     }
                     inner()
                 }

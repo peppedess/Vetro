@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -26,20 +26,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.peppedess.vetro.data.AppInfo
 import it.peppedess.vetro.ui.components.AppIcon
+import it.peppedess.vetro.ui.components.Glyph
+import it.peppedess.vetro.ui.components.GlyphIcon
 import it.peppedess.vetro.ui.components.IconAction
 import it.peppedess.vetro.ui.components.SearchPill
+import it.peppedess.vetro.ui.glass.glass
+import it.peppedess.vetro.ui.theme.IosColors
+import it.peppedess.vetro.ui.theme.VetroFont
 
 @Composable
 fun SpotlightSearch(
     apps: List<AppInfo>,
+    suggestions: List<AppInfo>,
+    topPadding: Dp,
     onLaunch: (AppInfo) -> Unit,
     actionsFor: (AppInfo) -> List<IconAction>,
     onWebSearch: (String) -> Unit,
@@ -61,11 +68,12 @@ fun SpotlightSearch(
                 .take(12)
         }
     }
+    val shown = if (query.isBlank()) suggestions.take(8) else results
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.62f))
+            .background(Color.Black.copy(alpha = 0.2f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -75,9 +83,9 @@ fun SpotlightSearch(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .systemBarsPadding()
+                .padding(top = topPadding)
                 .imePadding()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -104,23 +112,23 @@ fun SpotlightSearch(
                 Text(
                     text = "Annulla",
                     color = Color.White,
+                    fontFamily = VetroFont,
                     fontSize = 17.sp,
                     modifier = Modifier.clickable(onClick = onClose),
                 )
             }
 
-            if (results.isNotEmpty()) {
-                Spacer(Modifier.height(20.dp))
-                SectionTitle("App")
+            if (shown.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                SectionTitle(if (query.isBlank()) "Suggerimenti" else "App")
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .glass(RoundedCornerShape(22.dp), Color.White.copy(alpha = 0.14f), border = false)
                         .padding(vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    results.chunked(4).forEach { row ->
+                    shown.chunked(4).forEach { row ->
                         Row(Modifier.fillMaxWidth()) {
                             row.forEach { app ->
                                 Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
@@ -138,17 +146,24 @@ fun SpotlightSearch(
             }
 
             if (query.isNotBlank()) {
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(22.dp))
                 SectionTitle("Web")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .glass(RoundedCornerShape(16.dp), Color.White.copy(alpha = 0.14f), border = false)
                         .clickable { onWebSearch(query.trim()) }
-                        .padding(16.dp),
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Cerca “${query.trim()}” sul web", color = Color.White, fontSize = 16.sp)
+                    GlyphIcon(Glyph.SEARCH, IosColors.Blue, Modifier.size(18.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Cerca “${query.trim()}” sul web",
+                        color = Color.White,
+                        fontFamily = VetroFont,
+                        fontSize = 16.sp,
+                    )
                 }
             }
         }
@@ -160,8 +175,9 @@ private fun SectionTitle(text: String) {
     Text(
         text = text,
         color = Color.White,
+        fontFamily = VetroFont,
         fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
     )
 }
