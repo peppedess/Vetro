@@ -58,9 +58,11 @@ import it.peppedess.vetro.ui.components.Glyph
 import it.peppedess.vetro.ui.components.HomeSearchPill
 import it.peppedess.vetro.ui.components.IconAction
 import it.peppedess.vetro.ui.components.IconMenuOverlay
+import it.peppedess.vetro.ui.components.LocalBadges
 import it.peppedess.vetro.ui.components.LocalMenuController
+import it.peppedess.vetro.notifications.NotificationHub
+import it.peppedess.vetro.ui.system.NotificationCenter
 import it.peppedess.vetro.ui.components.MenuController
-import it.peppedess.vetro.ui.components.expandNotifications
 import it.peppedess.vetro.ui.components.launchApp
 import it.peppedess.vetro.ui.components.openAppInfo
 import it.peppedess.vetro.ui.components.uninstallApp
@@ -102,6 +104,10 @@ fun LauncherScreen(
     var editing by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var controlOpen by remember { mutableStateOf(false) }
+    var notificationsOpen by remember { mutableStateOf(false) }
+    val notifications by NotificationHub.items.collectAsStateWithLifecycle()
+    val badges = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
+    val appsByPackage = remember(state.all) { state.all.associateBy { it.packageName } }
     var openFolderId by remember { mutableStateOf<String?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -114,7 +120,7 @@ fun LauncherScreen(
     val onLibrary = pagerState.currentPage == pageCount - 1
     val openFolder = state.home.filterIsInstance<FolderItem>().firstOrNull { it.id == openFolderId }
 
-    val overlayOpen = searchOpen || controlOpen || openFolder != null || menu.request != null
+    val overlayOpen = searchOpen || controlOpen || notificationsOpen || openFolder != null || menu.request != null
     val blurRadius by animateDpAsState(if (overlayOpen) 24.dp else 0.dp, label = "blur")
 
     val cutoutTop = WindowInsets.displayCutout.asPaddingValues().calculateTopPadding()
@@ -175,6 +181,7 @@ fun LauncherScreen(
         if (homeSignal > 0) {
             searchOpen = false
             controlOpen = false
+            notificationsOpen = false
             editing = false
             openFolderId = null
             menu.dismiss()
@@ -198,6 +205,7 @@ fun LauncherScreen(
         CompositionLocalProvider(
             LocalWallpaper provides wallpaper,
             LocalMenuController provides menu,
+            LocalBadges provides badges,
         ) {
             val wp = wallpaper
             if (wp != null) {
@@ -272,6 +280,15 @@ fun LauncherScreen(
                             },
                             onMove = { key, index -> vm.moveHome(key, index) },
                             onDropOnto = { dragged, target -> vm.dropOnto(dragged, target) },
+                            onDropToDock = { key -> vm.moveHomeToDock(key) },
+                            onMoveToPage = { key, direction ->
+                                val target = (page + direction).coerceIn(0, pages.size - 1)
+                                if (target != page) {
+                                    val index = if (direction > 0) pageOffset(target) else pageOffset(page) - 1
+                                    vm.moveHome(key, index)
+                                    scope.launch { pagerState.animateScrollToPage(target) }
+                                }
+                            },
                             onEnterEdit = { editing = true },
                             onSwipeDown = { if (!editing) searchOpen = true },
                         )
@@ -359,6 +376,21 @@ fun LauncherScreen(
                 ControlCenter(topPadding = statusHeight, onClose = { controlOpen = false })
             }
 
+            AnimatedVisibility(
+                visible = notificationsOpen,
+                enter = fadeIn() + slideInVertically { -it / 3 },
+                exit = fadeOut() + slideOutVertically { -it / 3 },
+            ) {
+                NotificationCenter(
+                    notifications = notifications,
+                    hasAccess = remember(notificationsOpen) { NotificationHub.hasAccess(context) },
+                    topPadding = statusHeight,
+                    iconFor = { pkg -> appsByPackage[pkg]?.icon },
+                    labelFor = { pkg -> appsByPackage[pkg]?.label ?: pkg },
+                    onClose = { notificationsOpen = false },
+                )
+            }
+
             menu.request?.let { request ->
                 IconMenuOverlay(request = request, onDismiss = { menu.dismiss() })
             }
@@ -376,7 +408,7 @@ fun LauncherScreen(
                         onDragEnd = {
                             if (total > 30.dp.toPx()) {
                                 if (startX < size.width / 2f) {
-                                    context.expandNotifications()
+                                    notificationsOpen = true
                                 } else {
                                     controlOpen = true
                                 }

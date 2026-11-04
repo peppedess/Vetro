@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -36,6 +37,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +63,9 @@ import it.peppedess.vetro.ui.theme.VetroFont
 
 val IconShape = RoundedCornerShape(percent = 23)
 
+/** Numero di notifiche per pacchetto, per i badge rossi. */
+val LocalBadges = staticCompositionLocalOf<Map<String, Int>> { emptyMap() }
+
 @Composable
 fun AppIcon(
     app: AppInfo,
@@ -84,6 +89,7 @@ fun AppIcon(
         editing = editing,
         emphasized = emphasized,
         clickableInEdit = false,
+        badge = LocalBadges.current[app.packageName] ?: 0,
         onRemove = onRemove,
     ) {
         Image(bitmap = app.icon, contentDescription = app.label, modifier = Modifier.fillMaxSize())
@@ -112,6 +118,7 @@ fun FolderIcon(
         editing = editing,
         emphasized = emphasized,
         clickableInEdit = true,
+        badge = LocalBadges.current.let { badges -> folder.apps.distinctBy { it.packageName }.sumOf { badges[it.packageName] ?: 0 } },
         onRemove = onRemove,
     ) {
         FolderPreview(folder, iconSize)
@@ -162,6 +169,7 @@ private fun IconTile(
     editing: Boolean,
     emphasized: Boolean,
     clickableInEdit: Boolean,
+    badge: Int,
     onRemove: (() -> Unit)?,
     content: @Composable () -> Unit,
 ) {
@@ -237,6 +245,26 @@ private fun IconTile(
                     ),
             ) {
                 content()
+            }
+
+            if (badge > 0 && !editing) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 8.dp, y = (-8).dp)
+                        .height(22.dp)
+                        .widthIn(min = 22.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xFFFF3B30))
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (badge > 99) "99+" else badge.toString(),
+                        color = Color.White,
+                        style = TextStyle(fontFamily = VetroFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    )
+                }
             }
 
             if (editing && onRemove != null) {

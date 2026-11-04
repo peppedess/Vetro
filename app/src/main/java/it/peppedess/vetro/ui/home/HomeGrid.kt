@@ -9,7 +9,13 @@ import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -59,6 +65,8 @@ fun HomeGrid(
     onRemove: (HomeItem) -> Unit,
     onMove: (key: String, toIndex: Int) -> Unit,
     onDropOnto: (draggedKey: String, targetKey: String) -> Unit,
+    onDropToDock: (key: String) -> Unit,
+    onMoveToPage: (key: String, direction: Int) -> Unit,
     onEnterEdit: () -> Unit,
     onSwipeDown: () -> Unit,
 ) {
@@ -70,6 +78,8 @@ fun HomeGrid(
     val currentOffset by rememberUpdatedState(pageOffset)
     val move by rememberUpdatedState(onMove)
     val dropOnto by rememberUpdatedState(onDropOnto)
+    val dropToDock by rememberUpdatedState(onDropToDock)
+    val moveToPage by rememberUpdatedState(onMoveToPage)
     val swipeDown by rememberUpdatedState(onSwipeDown)
     val enterEdit by rememberUpdatedState(onEnterEdit)
 
@@ -78,6 +88,8 @@ fun HomeGrid(
     var grabOffset by remember { mutableStateOf(Offset.Zero) }
     var hoverIndex by remember { mutableIntStateOf(0) }
     var folderTarget by remember { mutableStateOf<String?>(null) }
+    var dockHover by remember { mutableStateOf(false) }
+    var edgeHover by remember { mutableIntStateOf(0) }
 
     val display = remember(items, draggingKey, hoverIndex) {
         val key = draggingKey
@@ -167,10 +179,25 @@ fun HomeGrid(
                         dragPos = slop.position
                         hoverIndex = start
                         folderTarget = null
+                        dockHover = false
+                        edgeHover = 0
+                        val edge = 22.dp.toPx()
+                        val dockLine = size.height + 30.dp.toPx()
 
                         val completed = drag(slop.id) { change ->
                             change.consume()
                             dragPos = change.position
+                            dockHover = item is AppItem && change.position.y > dockLine
+                            edgeHover = when {
+                                dockHover -> 0
+                                change.position.x < edge -> -1
+                                change.position.x > size.width - edge -> 1
+                                else -> 0
+                            }
+                            if (dockHover || edgeHover != 0) {
+                                folderTarget = null
+                                return@drag
+                            }
                             val others = currentItems.filter { it.key != item.key }
                             val idx = indexAt(change.position).coerceAtLeast(0)
                             val shown = others.toMutableList().apply {
@@ -193,10 +220,17 @@ fun HomeGrid(
                         val key = draggingKey
                         val target = folderTarget
                         if (completed && key != null) {
-                            if (target != null) dropOnto(key, target) else move(key, currentOffset + hoverIndex)
+                            when {
+                                dockHover -> dropToDock(key)
+                                edgeHover != 0 -> moveToPage(key, edgeHover)
+                                target != null -> dropOnto(key, target)
+                                else -> move(key, currentOffset + hoverIndex)
+                            }
                         }
                         draggingKey = null
                         folderTarget = null
+                        dockHover = false
+                        edgeHover = 0
                     }
                 },
         ) {
@@ -226,6 +260,17 @@ fun HomeGrid(
                         }
                     }
                 }
+            }
+
+            if (edgeHover != 0) {
+                Box(
+                    Modifier
+                        .align(if (edgeHover < 0) Alignment.CenterStart else Alignment.CenterEnd)
+                        .width(5.dp)
+                        .fillMaxHeight(0.5f)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.45f)),
+                )
             }
 
             val draggedItem = draggingKey?.let { k -> items.firstOrNull { it.key == k } }

@@ -141,6 +141,10 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         publish()
     }
 
+    fun moveHomeToDock(key: String) {
+        apps.firstOrNull { it.key == key }?.let { addToDock(it) }
+    }
+
     fun addToDock(app: AppInfo) {
         val dock = store.dock
         if (dock.size >= MAX_DOCK || app.key in dock) return
