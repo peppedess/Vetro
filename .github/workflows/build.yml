@@ -27,14 +27,17 @@ jobs:
           gradle-version: 8.14.3
 
       - name: Compila
-        run: gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+        run: |
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Errori
         if: failure()
-        run: grep -E "^e: " build.log || echo "Nessun errore Kotlin: controlla il log completo"
+        run: |
+          grep -E "^e: " build.log || echo "Nessun errore Kotlin, controlla il log completo"
 
       - name: Prepara APK
-        run: cp app/build/outputs/apk/release/app-release.apk Vetro-${{ github.run_number }}.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Vetro-${{ github.run_number }}.apk
 
       - name: Pubblica APK
         uses: softprops/action-gh-release@v2
