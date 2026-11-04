@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -37,6 +38,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.peppedess.vetro.data.AppInfo
+import it.peppedess.vetro.data.AppItem
+import it.peppedess.vetro.data.FolderItem
+import it.peppedess.vetro.data.HomeItem
 import it.peppedess.vetro.data.LauncherViewModel
 import it.peppedess.vetro.ui.components.Dock
 import it.peppedess.vetro.ui.components.IconAction
@@ -51,6 +55,7 @@ import kotlinx.coroutines.launch
 
 private const val COLUMNS = 4
 private const val ROWS = 6
+private const val PAGE_SIZE = COLUMNS * ROWS
 private const val MAX_DOCK = 4
 
 @Composable
@@ -64,29 +69,45 @@ fun LauncherScreen(
 
     var editing by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
+    var openFolderId by remember { mutableStateOf<String?>(null) }
 
     val pages = remember(state.home) {
-        state.home.chunked(COLUMNS * ROWS).ifEmpty { listOf(emptyList()) }
+        state.home.chunked(PAGE_SIZE).ifEmpty { listOf(emptyList()) }
     }
     val pageCount = pages.size + 1
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val onLibrary = pagerState.currentPage == pageCount - 1
+    val openFolder = state.home.filterIsInstance<FolderItem>().firstOrNull { it.id == openFolderId }
 
     val launch: (AppInfo) -> Unit = { app ->
         searchOpen = false
+        openFolderId = null
         vm.onLaunched(app)
         context.launchApp(app)
     }
 
-    fun inHome(app: AppInfo) = state.home.any { it.key == app.key }
+    fun inHome(app: AppInfo) = state.home.any { item ->
+        when (item) {
+            is AppItem -> item.app.key == app.key
+            is FolderItem -> item.apps.any { it.key == app.key }
+        }
+    }
+
     fun inDock(app: AppInfo) = state.dock.any { it.key == app.key }
 
-    fun homeActions(app: AppInfo) = listOf(
-        IconAction("Modifica schermata Home") { editing = true },
-        IconAction("Info app") { context.openAppInfo(app) },
-        IconAction("Rimuovi da Home") { vm.removeFromHome(app) },
-        IconAction("Disinstalla", destructive = true) { context.uninstallApp(app) },
-    )
+    fun homeActions(item: HomeItem): List<IconAction> = when (item) {
+        is AppItem -> listOf(
+            IconAction("Modifica schermata Home") { editing = true },
+            IconAction("Info app") { context.openAppInfo(item.app) },
+            IconAction("Rimuovi da Home") { vm.removeFromHome(item.app) },
+            IconAction("Disinstalla", destructive = true) { context.uninstallApp(item.app) },
+        )
+        is FolderItem -> listOf(
+            IconAction("Modifica schermata Home") { editing = true },
+            IconAction("Rinomina") { openFolderId = item.id },
+            IconAction("Rimuovi cartella", destructive = true) { vm.removeFolder(item.id) },
+        )
+    }
 
     fun dockActions(app: AppInfo) = listOf(
         IconAction("Modifica schermata Home") { editing = true },
@@ -102,10 +123,17 @@ fun LauncherScreen(
         add(IconAction("Disinstalla", destructive = true) { context.uninstallApp(app) })
     }
 
+    fun folderAppActions(folder: FolderItem, app: AppInfo) = listOf(
+        IconAction("Rimuovi dalla cartella") { vm.removeFromFolder(folder.id, app) },
+        IconAction("Info app") { context.openAppInfo(app) },
+        IconAction("Disinstalla", destructive = true) { context.uninstallApp(app) },
+    )
+
     LaunchedEffect(homeSignal) {
         if (homeSignal > 0) {
             searchOpen = false
             editing = false
+            openFolderId = null
             pagerState.animateScrollToPage(0)
         }
     }
@@ -155,13 +183,22 @@ fun LauncherScreen(
             ) { page ->
                 if (page < pages.size) {
                     HomeGrid(
-                        apps = pages[page],
+                        items = pages[page],
+                        pageOffset = page * PAGE_SIZE,
                         columns = COLUMNS,
                         rows = ROWS,
                         editing = editing,
                         onLaunch = launch,
+                        onOpenFolder = { openFolderId = it.id },
                         actionsFor = { homeActions(it) },
-                        onRemove = { vm.removeFromHome(it) },
+                        onRemove = { item ->
+                            when (item) {
+                                is AppItem -> vm.removeFromHome(item.app)
+                                is FolderItem -> vm.removeFolder(item.id)
+                            }
+                        },
+                        onMove = { key, index -> vm.moveHome(key, index) },
+                        onDropOnto = { dragged, target -> vm.dropOnto(dragged, target) },
                         onEnterEdit = { editing = true },
                         onSwipeDown = { if (!editing) searchOpen = true },
                     )
@@ -194,6 +231,22 @@ fun LauncherScreen(
                     onLaunch = launch,
                     actionsFor = { dockActions(it) },
                     onRemove = { vm.removeFromDock(it) },
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = openFolder != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.85f),
+            exit = fadeOut(),
+        ) {
+            openFolder?.let { folder ->
+                FolderOverlay(
+                    folder = folder,
+                    onLaunch = launch,
+                    actionsFor = { app -> folderAppActions(folder, app) },
+                    onRename = { name -> vm.renameFolder(folder.id, name) },
+                    onDismiss = { openFolderId = null },
                 )
             }
         }

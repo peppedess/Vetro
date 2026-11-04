@@ -27,13 +27,27 @@ class LayoutStore(context: Context) {
 
     fun incrementLaunch(key: String) = prefs.edit { putInt("launch:$key", launchCount(key) + 1) }
 
+    fun folderApps(id: String): List<String> = readList("folder_apps:$id")
+
+    fun setFolderApps(id: String, apps: List<String>) = writeList("folder_apps:$id", apps)
+
+    fun folderName(id: String): String = prefs.getString("folder_name:$id", null) ?: DEFAULT_FOLDER
+
+    fun setFolderName(id: String, name: String) = prefs.edit { putString("folder_name:$id", name) }
+
+    fun deleteFolder(id: String) = prefs.edit {
+        remove("folder_apps:$id")
+        remove("folder_name:$id")
+    }
+
     private fun readList(name: String): List<String> =
         prefs.getString(name, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
 
     private fun writeList(name: String, value: List<String>) =
         prefs.edit { putString(name, value.joinToString(SEPARATOR)) }
 
-    private companion object {
-        const val SEPARATOR = "|"
+    companion object {
+        const val DEFAULT_FOLDER = "Cartella"
+        private const val SEPARATOR = "|"
     }
 }

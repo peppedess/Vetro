@@ -15,11 +15,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.peppedess.vetro.data.AppInfo
+import it.peppedess.vetro.data.FolderItem
 
 val IconShape = RoundedCornerShape(percent = 23)
 
@@ -66,7 +73,95 @@ fun AppIcon(
     iconSize: Dp = 60.dp,
     showLabel: Boolean = true,
     editing: Boolean = false,
+    emphasized: Boolean = false,
     onRemove: (() -> Unit)? = null,
+) {
+    IconTile(
+        label = app.label,
+        seed = app.key.hashCode(),
+        actions = actions,
+        onClick = onClick,
+        modifier = modifier,
+        iconSize = iconSize,
+        showLabel = showLabel,
+        editing = editing,
+        emphasized = emphasized,
+        clickableInEdit = false,
+        onRemove = onRemove,
+    ) {
+        Image(bitmap = app.icon, contentDescription = app.label, modifier = Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+fun FolderIcon(
+    folder: FolderItem,
+    actions: List<IconAction>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 60.dp,
+    editing: Boolean = false,
+    emphasized: Boolean = false,
+    onRemove: (() -> Unit)? = null,
+) {
+    IconTile(
+        label = folder.name,
+        seed = folder.id.hashCode(),
+        actions = actions,
+        onClick = onClick,
+        modifier = modifier,
+        iconSize = iconSize,
+        showLabel = true,
+        editing = editing,
+        emphasized = emphasized,
+        clickableInEdit = true,
+        onRemove = onRemove,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White.copy(alpha = 0.28f))
+                .padding(iconSize * 0.12f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            repeat(3) { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    repeat(3) { col ->
+                        val app = folder.apps.getOrNull(row * 3 + col)
+                        val mini = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                        if (app != null) {
+                            Image(bitmap = app.icon, contentDescription = null, modifier = mini.clip(IconShape))
+                        } else {
+                            Spacer(mini)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IconTile(
+    label: String,
+    seed: Int,
+    actions: List<IconAction>,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    iconSize: Dp,
+    showLabel: Boolean,
+    editing: Boolean,
+    emphasized: Boolean,
+    clickableInEdit: Boolean,
+    onRemove: (() -> Unit)?,
+    content: @Composable () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
@@ -74,7 +169,11 @@ fun AppIcon(
     val pressed by interaction.collectIsPressedAsState()
 
     val scale = animateFloatAsState(
-        targetValue = if (pressed || menuOpen) 0.9f else 1f,
+        targetValue = when {
+            emphasized -> 1.18f
+            pressed || menuOpen -> 0.9f
+            else -> 1f
+        },
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
@@ -88,7 +187,7 @@ fun AppIcon(
             targetValue = 1.8f,
             animationSpec = infiniteRepeatable(
                 animation = tween(
-                    durationMillis = 120 + (app.key.hashCode() and 31),
+                    durationMillis = 120 + (seed and 31),
                     easing = LinearEasing,
                 ),
                 repeatMode = RepeatMode.Reverse,
@@ -111,16 +210,14 @@ fun AppIcon(
                 rotationZ = wiggle?.value ?: 0f
             },
         ) {
-            Image(
-                bitmap = app.icon,
-                contentDescription = app.label,
+            Box(
                 modifier = Modifier
                     .size(iconSize)
                     .clip(IconShape)
                     .combinedClickable(
                         interactionSource = interaction,
                         indication = null,
-                        onClick = { if (!editing) onClick() },
+                        onClick = { if (!editing || clickableInEdit) onClick() },
                         onLongClick = {
                             if (!editing && actions.isNotEmpty()) {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -128,7 +225,9 @@ fun AppIcon(
                             }
                         },
                     ),
-            )
+            ) {
+                content()
+            }
 
             if (editing && onRemove != null) {
                 Box(
@@ -175,7 +274,7 @@ fun AppIcon(
         if (showLabel) {
             Spacer(Modifier.height(5.dp))
             Text(
-                text = app.label,
+                text = label,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
